@@ -69,8 +69,6 @@ class Money(BaseModel):
                 symbol = "C$"
             case Currency.EUR:
                 symbol = "€"
-            case _:
-                symbol = ""
         return f"{symbol}{self._float_value:.2f}"
     
     def __repr__(self) -> str:
@@ -82,6 +80,15 @@ class Money(BaseModel):
                          currency=self.currency)
         else:
             return self + other.convert(target=self.currency)
+
+    def __sub__(self,other:Money) -> Money:
+        return self + (-1*other)
+
+    def __mul__(self, other:(int|float)) -> Money:
+        return Money(value=self.value*other, currency=self.currency)
+
+    def __rmul__(self, other:(int|float)) -> Money:
+        return self * other
 
     def convert(self, target:Currency) -> Money:
         if(self.currency == target):
