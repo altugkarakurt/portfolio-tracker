@@ -1,7 +1,8 @@
-from portfolioapp.core.asset import Money, Currency
+from portfolioapp.core.asset import Money, Currency, Equity, StockExchange
 from decimal import Decimal
 
 def main():
+    """
     print("Initializing")
     m1 = Money(value="30000.0", currency=Currency.USD)
     m2 = Money(value=50000.0, currency=Currency.CAD)
@@ -19,6 +20,11 @@ def main():
     print(f"negative: {(-m1)=}")
 
     print(f"Clean print: {str(m2)} {str(m1)}")
+    """
+
+    t = Equity(symbol="CPNG", exchange=StockExchange.NYSE)
+    print(t.fast_query())
+
 
 if __name__ == "__main__":
     main()

@@ -1,9 +1,21 @@
 from cachetools import cached, TTLCache
+from datetime import date, datetime, timezone
 from decimal import Decimal
-from enum import Enum
+from enum import Enum, auto
 from forex_python.converter import CurrencyRates
-from typing import Annotated, Any, Self
-from pydantic import BaseModel, BeforeValidator, ConfigDict, model_validator
+from typing import (
+    Annotated,
+    Any, 
+    Self,
+)
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    model_validator,
+)
+import yfinance as yf
 
 from . import decimal_from_numeral
 
@@ -17,8 +29,8 @@ class Currency(str, Enum):
     def __str__(self) -> str:
         return self.value
 
-class Money(BaseModel):
 
+class Money(BaseModel):
     """------------------------------------------------------------------------
     An immutable data class that stores money in a given currency. Implements
     currency conversion and arithmethic.
@@ -95,4 +107,104 @@ class Money(BaseModel):
         return Money(value=(self.value*rate),currency=target)
 
 
+class StockExchange(str, Enum):
+    NYSE   = "New York Stock Exchange"
+    NASDAQ = "NASDAQ"
+    TSX    = "Toronto Stock Exchange"
+    TSXV   = "TSX Venture Exchange"
+    LSE    = "London Stock Exchange"
+    OTC    = "OTC Markets"
 
+    def __str__(self) -> str:
+        return self.name
+
+    @property
+    def full_name(self) -> str:
+        return self.value
+
+    @property
+    def suffix(self):
+        match (self):
+            case (StockExchange.NYSE | StockExchange.NASDAQ | StockExchange.OTC):
+                return ""
+            case StockExchange.TSX:
+                return ".TO"
+            case StockExchange.TSXV:
+                return ".V"
+            case StockExchange.LSE:
+                return ".L"
+
+
+class Commodity(str, Enum):
+    WTI         = "CL=F"
+    BRENT       = "BZ-F"
+    NATURAL_GAS = "NG=F"
+    GOLD        = "GC=F"
+    SILVER      = "SI=F"
+    COPPER      = "HG=F"
+    PLATINUM    = "PL=F"
+    PALLADIUM   = "PA=F"
+
+
+class Equity(BaseModel):
+    """------------------------------------------------------------------------
+    An immutable data class that stores an equity (stock/ETF for now)
+    ---------------------------------------------------------------------------
+    symbol : str
+    exchange : StockExchange
+        The currency the value is in.
+    is_etf: bool
+        True if this is an ETF/Index Fund, False if this is a company stock.
+    ---------------------------------------------------------------------------
+    ticker : post-processed version of the symbol, translated to yfinance
+             format. ETFs get a prefix "^", while non-US stocks get a suffix
+    ------------------------------------------------------------------------"""
+    symbol: str
+    exchange: StockExchange
+    is_etf: bool = False
+    ticker: str = ""
+    model_config = ConfigDict(frozen=True)
+
+    def model_post_init(self, __context):
+        prefix = "^" if(self.is_etf) else ""
+        ticker = f"{prefix}{self.symbol}{self.exchange.suffix}"
+
+        # Use object.__setattr__ to bypass the frozen restriction
+        object.__setattr__(self, 'ticker', ticker)
+
+
+    @cached(cache=TTLCache(maxsize=100, ttl=300))
+    def fast_query(self) -> dict[str, Any]:
+        """
+            Query for the latest data for this equity. The responses are
+            cached for 5 minutes to reduce traffic
+        """
+        fields = ["currency", "exchange", "last_price", "market_cap",
+                  "day_high", "day_low"]
+        data = yf.Ticker(self.ticker).fast_info
+        return { field:data[field] for field in fields }
+
+    @cached(cache=TTLCache(maxsize=100, ttl=300))
+    def full_query(self) -> dict[str, Any]:
+        """
+            Query for the latest data for this equity. The responses are
+            cached for 5 minutes to reduce traffic
+        """
+        data = yf.Ticker(self.ticker)
+        return data.info 
+
+
+class TransactionType(str, Enum):
+    BUY = auto()
+    SELL = auto()
+    SHORT_SELL = auto()
+    SHORT_COVER = auto()
+
+
+class Transaction(BaseModel):
+    equity: Equity
+    cost: Money
+    transaction_date: date = Field(
+        default_factory=lambda: datetime.now(timezone.utc).date()
+    )
+    transaction_type: TransactionType
