@@ -1,6 +1,8 @@
+from cachetools import cached, TTLCache
 from enum import Enum
-from typing import ClassVar, Self
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from forex_python.converter import CurrencyRates
+from typing import Self
+from pydantic import BaseModel, ConfigDict, model_validator
 
 
 def fake_forex(from_cur:Currency, to_cur:Currency) -> float:
@@ -28,19 +30,17 @@ class Money(BaseModel):
     value: int | float
     currency: Currency
 
-    # When the exchange rate is retrieved for a pair of currencies for the
-    # first time, this dict caches it
-    exchange_rates: ClassVar[dict[str, float]] = dict()
 
     @classmethod
+    @cached(cache=TTLCache(maxsize=100, ttl=3600))
     def exchange_rate(cls, 
                       from_currency: Currency, 
                       to_currency: Currency) -> float:
-        if(key:=f"{from_currency}{to_currency}") not in cls.exchange_rates.keys():
-            rate =fake_forex(from_currency, to_currency)
-            cls.exchange_rates[key] = rate
-            cls.exchange_rates[f"{to_currency}{from_currency}"] = 1 / rate
-        return cls.exchange_rates[key]
+        """
+            Interface for retrieving currency exchange rates. The rates are
+            cached for an hour to minimize server class.
+        """
+        return CurrencyRates().get_rate(from_currency, to_currency)
 
 
     @model_validator(mode='before')
@@ -69,10 +69,10 @@ class Money(BaseModel):
                 symbol = "C$"
             case Currency.EUR:
                 symbol = "€"
-        return f"{symbol}{self._float_value:.2f}"
+        return f"{symbol}{self._float_value:,.2f}"
     
     def __repr__(self) -> str:
-        return f"Money({self._float_value},{str(self.currency)})"
+        return f"Money({self._float_value:,},{str(self.currency)})"
 
     def __add__(self,other:Money) -> Money:
         if(self.currency == other.currency):
@@ -82,7 +82,7 @@ class Money(BaseModel):
             return self + other.convert(target=self.currency)
 
     def __sub__(self,other:Money) -> Money:
-        return self + (-1*other)
+        return self + (-other)
 
     def __mul__(self, other:(int|float)) -> Money:
         return Money(value=self.value*other, currency=self.currency)
@@ -90,8 +90,14 @@ class Money(BaseModel):
     def __rmul__(self, other:(int|float)) -> Money:
         return self * other
 
+    def __neg__(self):
+        return self*-1
+
     def convert(self, target:Currency) -> Money:
         if(self.currency == target):
             return Money(value=self.value, currency=target)
         rate = self.exchange_rate(self.currency, target)
         return Money(value=(self._float_value*rate),currency=target)
+
+
+

@@ -2,8 +2,8 @@ from portfolioapp.core.asset import Money, Currency
 
 def main():
     print("Initializing")
-    m1 = Money(value=3.0, currency=Currency.USD)
-    m2 = Money(value=5.0, currency=Currency.CAD)
+    m1 = Money(value=3000.0, currency=Currency.USD)
+    m2 = Money(value=50000.0, currency=Currency.CAD)
     print(f"{m1=}, {m2=}")
     print("-------------------")
     print(f"sum money: {(m1+m2)=}")
@@ -12,7 +12,7 @@ def main():
     print("-------------------")
     print(f"left twice: {(2*m2)=}")
     print(f"right negative thrice: {(m2*-3)=}")
-
+    print(f"negative: {(-m1)=}")
 
 if __name__ == "__main__":
     main()
