@@ -1,0 +1,4 @@
+equity,exchange,cost,units,transaction_date,transaction_type
+CPNG,NYSE,-2000,11,04/17/26,BUY
+CPNG,NYSE,1000,9,04/18/26,SELL
+AAPL,NASDAQ,2500,-10,04/10/26,SHORT_SELL
