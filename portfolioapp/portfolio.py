@@ -20,6 +20,8 @@ class Position(BaseModel):
     units: float = 0
     avg_cost: Money = Money()
 
+    # TODO: add a post_init to update avg_cost, units, etc.
+
     @property
     def is_open(self) -> bool:
         return self.units != 0
@@ -36,6 +38,14 @@ class Position(BaseModel):
     def realized_gain(self):
         # for t in self.transactions:
         pass
+
+    def __str__(self) -> str:
+        status_str = "Open" if(self.is_open) else "Closed"
+        res = f"{self.equity} ({status_str}): {self.units} shares with an average cost {self.avg_cost}\n"
+        res += f"\tMarket Value: {self.market_value}, Cost Basis:{self.cost_basis}\n\tTransactions:\n"
+        for transaction in self.transactions:
+            res += f"\t\t{transaction}\n"
+        return res
 
     def add_transaction(self, transaction: Transaction) -> None:
         if(self.equity != transaction.equity):

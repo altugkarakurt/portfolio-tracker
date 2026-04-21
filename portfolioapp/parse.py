@@ -5,15 +5,7 @@ from typing import Any, cast
 
 
 def from_transaction_csv(csvfile:str): # -> Portfolio:
-    """
-    equity: Equity
-    cost: Money
-    units: float
-    transaction_date: date = Field(
-        default_factory=lambda: datetime.now(timezone.utc).date()
-    )
-    transaction_type: TransactionType
-    """
+
     df = pd.read_csv(csvfile)
     
     # defaultdict is intentionally omitted to prevent creating empty positions
@@ -35,5 +27,8 @@ def from_transaction_csv(csvfile:str): # -> Portfolio:
             transactions_by_equity[equity] = [transaction]
 
     positions = [Position(equity=e, transactions=p) for e,p in transactions_by_equity.items()]
+
+    for position in positions:
+        print(f"{position}")
     
     return Portfolio(positions=positions)

@@ -11,12 +11,16 @@ from pydantic import (
     field_validator,
 )
 import yfinance as yf
-from . import portfolioapp_config as config
+from .config import get_settings
 
 
+settings = get_settings()
+
+# Generates a Decimal from any suitable type to be used as monetary value
+# and fixes the resolution to 10^(-settings.decimal_precision), (default=4)
 def decimal_from_numeral(num: Decimal|float|int|str ) -> Decimal:
     num_dec = Decimal(num)
-    template = Decimal(10) ** -(config["DECIMAL_PRECISION"])
+    template = Decimal(10) ** -(settings.decimal_precision)
     return num_dec.quantize(template)
 
 
@@ -25,9 +29,6 @@ class Currency(StrEnum):
     CAD = "CAD"
     EUR = "EUR"
     GBP = "GBP"
-
-    def __str__(self) -> str:
-        return self.value
 
 
 class Money(BaseModel):
@@ -45,11 +46,11 @@ class Money(BaseModel):
     ------------------------------------------------------------------------"""
     model_config = ConfigDict(frozen=True) # makes all instance var.s immutable
     value: Decimal = Decimal(0)
-    currency: Currency = config["DEFAULT_CURRENCY"]
+    currency: Currency = Currency(settings.default_currency)
 
     @field_validator("value", mode="before")
     @classmethod
-    def parse_value(cls, m_value:(Decimal|int|float|str)) -> Decimal:
+    def validate_value(cls, m_value:(Decimal|int|float|str)) -> Decimal:
         return decimal_from_numeral(m_value)
 
     def __str__(self) -> str:
@@ -121,13 +122,6 @@ class StockExchange(StrEnum):
     LSE    = "LSE"
     OTC    = "OTC"
 
-    def __str__(self) -> str:
-        return self.name
-
-    @property
-    def full_name(self) -> str:
-        return self.value
-
     @property
     def suffix(self):
         match (self):
@@ -166,7 +160,7 @@ class Equity(BaseModel):
              format. ETFs get a prefix "^", while non-US stocks get a suffix
     ------------------------------------------------------------------------"""
     symbol: str
-    exchange: StockExchange = StockExchange(config["DEFAULT_EXCHANGE"])
+    exchange: StockExchange = StockExchange(settings.default_exchange)
     is_etf: bool = False
     ticker: str = ""
     model_config = ConfigDict(frozen=True)
@@ -177,6 +171,9 @@ class Equity(BaseModel):
 
         # Use object.__setattr__ to bypass the frozen restriction
         object.__setattr__(self, 'ticker', ticker)
+
+    def __str__(self) -> str:
+        return self.symbol
 
     def __repr__(self) -> str:
         return f"Equity({self.ticker})"
@@ -202,7 +199,7 @@ class Equity(BaseModel):
         return data.info
 
     def quote(self) -> Money:
-        response = self.fast_query()["last_price"]
+        response = self.fast_query()
         return Money(value=response["last_price"], currency=response["currency"])
 
 
@@ -211,13 +208,6 @@ class TransactionType(StrEnum):
     SELL = "SELL"
     SHORT_SELL = "SHORT_SELL"
     SHORT_COVER = "SHORT_COVER"
-
-    def __str__(self) -> str:
-        return self.value
-
-    def __repr__(self) -> str:
-        return f"TransactionType({ self.value })"
-
 
 
 class Transaction(BaseModel):
@@ -246,6 +236,8 @@ class Transaction(BaseModel):
     @classmethod
     def parse_date(cls, t_date:(str|date)) -> date:
         if(isinstance(t_date, str)):
-            return datetime.strptime(t_date, config["TIME_FORMAT"]).date()
+            return datetime.strptime(t_date, settings.default_time_format).date()
         return t_date
 
+    def __str__(self) -> str:
+        return f"({str(self.transaction_type)} {str(self.equity)}: {self.units} shares for {self.cost} on {str(self.transaction_date)})"
