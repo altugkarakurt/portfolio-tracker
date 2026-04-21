@@ -1,0 +1,6 @@
+{
+    "DECIMAL_PRECISION": 4,
+    "DEFAULT_CURRENCY": "USD",
+    "DEFAULT_EXCHANGE": "NYSE",
+    "TIME_FORMAT": "%m/%d/%y"
+}
