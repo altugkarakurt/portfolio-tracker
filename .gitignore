@@ -12,3 +12,6 @@ wheels/
 
 # Custom
 .DS_Store
+
+# Test
+.coverage

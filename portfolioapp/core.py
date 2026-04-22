@@ -8,12 +8,14 @@ from decimal import Decimal
 from enum import StrEnum
 from forex_python.converter import CurrencyRates
 from typing import (
+    Annotated,
     Any,
     cast,
     Self,
 )
 from pydantic import (
     BaseModel,
+    BeforeValidator,
     ConfigDict,
     Field,
     field_validator,
@@ -27,10 +29,15 @@ settings = get_settings()
 
 # Generates a Decimal from any suitable type to be used as monetary value
 # and fixes the resolution to 10^(-settings.decimal_precision), (default=4)
-def decimal_from_numeral(num: Decimal|float|int|str ) -> Decimal:
+def decimal_from_numeral(num: Decimal|float|int|str) -> Decimal:
     num_dec = Decimal(num)
     template = Decimal(10) ** -(settings.decimal_precision)
     return num_dec.quantize(template)
+
+def money_from_numeral(num: Money|Decimal|float|int|str) -> Money:
+    if(isinstance(num, Money)):
+        return num
+    return Money(value=decimal_from_numeral(num))
 
 
 class Currency(StrEnum):
@@ -54,13 +61,13 @@ class Money(BaseModel):
         The currency the value is in.
     ------------------------------------------------------------------------"""
     model_config = ConfigDict(frozen=True) # makes all instance var.s immutable
-    value: Decimal = Decimal(0)
+    value: Annotated[Decimal, BeforeValidator(decimal_from_numeral)] = Decimal(0)
     currency: Currency = Currency(settings.default_currency)
 
     @field_validator("value", mode="before")
     @classmethod
-    def validate_value(cls, m_value:(Decimal|int|float|str)) -> Decimal:
-        return decimal_from_numeral(m_value)
+    def validate_value(cls, value:(Decimal|int|float|str)) -> Decimal:
+        return decimal_from_numeral(value)
 
     def __str__(self) -> str:
         match self.currency:
@@ -237,7 +244,7 @@ class Transaction(BaseModel):
     ------------------------------------------------------------------------"""
     model_config = ConfigDict(frozen=True) # makes all instance var.s immutable
     equity: Equity
-    cost: Money
+    cost: Annotated[Money, BeforeValidator(money_from_numeral)]
     units: float
     transaction_date: date = Field(
         default_factory=lambda: datetime.now(timezone.utc).date()
