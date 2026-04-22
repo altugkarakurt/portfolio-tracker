@@ -1,17 +1,26 @@
 from cachetools import cached, TTLCache
-from datetime import date, datetime, timezone
+from datetime import (
+    date,
+    datetime,
+    timezone,
+)
 from decimal import Decimal
 from enum import StrEnum
 from forex_python.converter import CurrencyRates
-from typing import Any
+from typing import (
+    Any,
+    cast,
+    Self,
+)
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
     field_validator,
+    model_validator,
 )
 import yfinance as yf
-from .config import get_settings
+from portfolioapp.config import get_settings
 
 
 settings = get_settings()
@@ -68,6 +77,8 @@ class Money(BaseModel):
     def __repr__(self) -> str:
         return f"Money({self.value:,.2f}, {str(self.currency)})"
 
+    # TODO: The dunder methods are returning Money instead of Self due to static
+    #       type-checker errors, but that's the right way
     def __add__(self,other:Money) -> Money:
         if(self.currency != other.currency):
             return self + other.convert(target=self.currency)
@@ -105,13 +116,12 @@ class Money(BaseModel):
     @cached(cache=TTLCache(maxsize=100, ttl=3600))
     def exchange_rate(cls, 
                       from_currency: Currency, 
-                      to_currency: Currency) -> Any:
+                      to_currency: Currency) -> Decimal:
         """
             Interface for retrieving currency exchange rates. The rates are
             cached for an hour to minimize server class. Should return Decimal
         """
-        return CurrencyRates(force_decimal=True).get_rate(from_currency, to_currency)
-
+        return cast(Decimal,CurrencyRates(force_decimal=True).get_rate(from_currency, to_currency))
 
 
 class StockExchange(StrEnum):
@@ -165,12 +175,14 @@ class Equity(BaseModel):
     ticker: str = ""
     model_config = ConfigDict(frozen=True)
 
-    def model_post_init(self, __context):
+    @model_validator(mode="after")
+    def generate_ticker(self) -> Self:
         prefix = "^" if(self.is_etf) else ""
         ticker = f"{prefix}{self.symbol}{self.exchange.suffix}"
 
         # Use object.__setattr__ to bypass the frozen restriction
         object.__setattr__(self, 'ticker', ticker)
+        return self
 
     def __str__(self) -> str:
         return self.symbol
@@ -223,7 +235,7 @@ class Transaction(BaseModel):
         The resolution is in days
     transaction_type : TransactionType
     ------------------------------------------------------------------------"""
-
+    model_config = ConfigDict(frozen=True) # makes all instance var.s immutable
     equity: Equity
     cost: Money
     units: float
@@ -234,7 +246,7 @@ class Transaction(BaseModel):
 
     @field_validator("transaction_date", mode="before")
     @classmethod
-    def parse_date(cls, t_date:(str|date)) -> date:
+    def validate_date(cls, t_date:(str|date)) -> date:
         if(isinstance(t_date, str)):
             return datetime.strptime(t_date, settings.default_time_format).date()
         return t_date
