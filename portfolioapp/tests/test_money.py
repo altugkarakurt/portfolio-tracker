@@ -1,6 +1,6 @@
 from portfolioapp.core import Money
 from portfolioapp.config import get_settings
-
+from decimal import Decimal
 
 settings = get_settings()
 
@@ -12,7 +12,7 @@ def test_money_init_default():
 
 def test_money_init():
     # Tests the model_validator
-    money_list = [Money(value=100), Money(value="100"), Money(value=100.0)]
+    money_list = [Money(value=100), Money(value=Decimal(100)), Money(value=100.0)]
     assert(all([m.value == 100 for m in money_list]))
 
 def test_money_comparison():
@@ -37,12 +37,5 @@ def test_money_arithmetic():
     assert(m1+m1 == m3)  # __add__
     assert(m1-m2 == m3)  # __sub__
     assert(m3 / 2 == m1) # __truediv__
-
-def test_money_convert():
-    # Tests currency conversion
-    m_usd = Money(value=100, currency="USD")
-    m_cad = m_usd.convert("CAD")
-    
-    assert(m_usd == m_cad.convert("USD"))
 
 

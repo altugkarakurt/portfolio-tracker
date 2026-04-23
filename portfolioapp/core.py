@@ -23,18 +23,15 @@ from pydantic import (
 )
 import yfinance as yf
 from portfolioapp.config import get_settings
+from portfolioapp.utils import (
+    Numeral,
+    decimal_from_numeral,
+)
 
 
 settings = get_settings()
 
-# Generates a Decimal from any suitable type to be used as monetary value
-# and fixes the resolution to 10^(-settings.decimal_precision), (default=4)
-def decimal_from_numeral(num: Decimal|float|int|str) -> Decimal:
-    num_dec = Decimal(num)
-    template = Decimal(10) ** -(settings.decimal_precision)
-    return num_dec.quantize(template)
-
-def money_from_numeral(num: Money|Decimal|float|int|str) -> Money:
+def money_from_numeral(num: Money|Numeral) -> Money:
     if(isinstance(num, Money)):
         return num
     return Money(value=decimal_from_numeral(num))
@@ -66,7 +63,7 @@ class Money(BaseModel):
 
     @field_validator("value", mode="before")
     @classmethod
-    def validate_value(cls, value:(Decimal|int|float|str)) -> Decimal:
+    def validate_value(cls, value:Numeral) -> Decimal:
         return decimal_from_numeral(value)
 
     def __str__(self) -> str:
@@ -94,14 +91,14 @@ class Money(BaseModel):
     def __sub__(self,other:Money) -> Money:
         return self + (-other)
 
-    def __mul__(self, other:(Decimal|int|float)) -> Money:
+    def __mul__(self, other:Numeral) -> Money:
         other_val = other if(isinstance(other, Decimal)) else decimal_from_numeral(other)
         return Money(value=(self.value*other_val), currency=self.currency)
 
-    def __rmul__(self, other:(Decimal|int|float)) -> Money:
+    def __rmul__(self, other:Numeral) -> Money:
         return self * other
 
-    def __truediv__(self, other:(Decimal|int|float)) -> Money:
+    def __truediv__(self, other:Numeral) -> Money:
         return Money(value=self.value / decimal_from_numeral(other), currency=self.currency)
 
     def __neg__(self):
@@ -235,7 +232,7 @@ class Transaction(BaseModel):
     ---------------------------------------------------------------------------
     equity : Equity
     cost : Money
-        Positive if SELL/SHORT_SELL, negative if BUY/SHORT_COVER
+        Total amount. Positive if SELL/SHORT_SELL, negative if BUY/SHORT_COVER
     units: float
         Negative if SELL/SHORT_SELL, positive if BUY/SHORT_COVER
     transaction_date : date
@@ -257,6 +254,15 @@ class Transaction(BaseModel):
         if(isinstance(t_date, str)):
             return datetime.strptime(t_date, settings.default_time_format).date()
         return t_date
+
+    @property
+    def signed_units(self) -> float:
+        return self.units if(self.transaction_type in (TransactionType.BUY, TransactionType.SHORT_COVER)) \
+                          else -1*self.units
+
+    @property
+    def is_position_increasing(self) -> bool:
+        return (self.transaction_type in (TransactionType.BUY, TransactionType.SHORT_SELL))
 
     def __str__(self) -> str:
         return f"({str(self.transaction_type)} {str(self.equity)}: {self.units} shares for {self.cost} on {str(self.transaction_date)})"
