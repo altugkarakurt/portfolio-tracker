@@ -232,7 +232,7 @@ class Transaction(BaseModel):
     cost : Money
         Total amount. Positive if SELL/SHORT_SELL, negative if BUY/SHORT_COVER
     units: float
-        Negative if SELL/SHORT_SELL, positive if BUY/SHORT_COVER
+        Non-negative
     transaction_date : date
         The resolution is in days
     transaction_type : TransactionType
@@ -250,13 +250,14 @@ class Transaction(BaseModel):
     per_cost: Money = Field(init=False, default=Money())
     is_position_increasing: bool = Field(init=False, default=False)
 
-    def model_post_init(self, context: Any, /) -> None:
+    def model_post_init(self, context: Any) -> None:
         object.__setattr__(self, "signed_units", self.units \
                            if(self.transaction_type in (TransactionType.BUY, TransactionType.SHORT_COVER)) \
                            else -1*self.units)
         object.__setattr__(self, "per_cost", self.cost / self.units)
         object.__setattr__(self, "is_position_increasing",
                            (self.transaction_type in (TransactionType.BUY, TransactionType.SHORT_SELL)))
+
     @field_validator("transaction_date", mode="before")
     @classmethod
     def validate_date(cls, t_date:(str|date)) -> date:

@@ -1,3 +1,5 @@
+# pyright: reportArgumentType=false
+
 from portfolioapp.core import Equity, StockExchange
 from portfolioapp.config import get_settings
 

@@ -1,3 +1,5 @@
+# pyright: reportArgumentType=false
+
 from portfolioapp.core import Money
 from portfolioapp.config import get_settings
 from decimal import Decimal
