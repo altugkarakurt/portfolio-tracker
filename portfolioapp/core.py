@@ -81,34 +81,32 @@ class Money(BaseModel):
     def __repr__(self) -> str:
         return f"Money({self.value:,.2f}, {str(self.currency)})"
 
-    # TODO: The dunder methods are returning Money instead of Self due to static
-    #       type-checker errors, but that's the right way
-    def __add__(self,other:Money) -> Money:
+    def __add__(self,other:Money) -> Self:
         if(self.currency != other.currency):
             return self + other.convert(target=self.currency)
-        return Money(value=(self.value + other.value), currency=self.currency)
+        return self.model_copy(update={"value":(self.value + other.value)})
 
-    def __sub__(self,other:Money) -> Money:
+    def __sub__(self,other:Money) -> Self:
         return self + (-other)
 
-    def __mul__(self, other:Numeral) -> Money:
+    def __mul__(self, other:Numeral) -> Self:
         other_val = other if(isinstance(other, Decimal)) else decimal_from_numeral(other)
-        return Money(value=(self.value*other_val), currency=self.currency)
+        return self.model_copy(update={"value":(self.value * other_val)})
 
-    def __rmul__(self, other:Numeral) -> Money:
+    def __rmul__(self, other:Numeral) -> Self:
         return self * other
 
-    def __truediv__(self, other:Numeral) -> Money:
-        return Money(value=self.value / decimal_from_numeral(other), currency=self.currency)
+    def __truediv__(self, other:Numeral) -> Self:
+        return self.model_copy(update={"value":(self.value / decimal_from_numeral(other))})
 
     def __neg__(self):
         return self*-1
 
-    def convert(self, target:Currency) -> Money:
+    def convert(self, target:Currency) -> Self:
         if(self.currency == target):
-            return Money(value=self.value, currency=target)
+            return self
         rate = self.exchange_rate(self.currency, target)
-        return Money(value=(self.value*rate),currency=target)
+        return self.model_copy(update={"value":(self.value * rate)})
 
     def __lt__(self, other:Money) -> bool:
         return (self.currency == other.currency and self.value < other.value)
@@ -248,21 +246,23 @@ class Transaction(BaseModel):
     )
     transaction_type: TransactionType
 
+    signed_units: float = Field(init=False, default=0)
+    per_cost: Money = Field(init=False, default=Money())
+    is_position_increasing: bool = Field(init=False, default=False)
+
+    def model_post_init(self, context: Any, /) -> None:
+        object.__setattr__(self, "signed_units", self.units \
+                           if(self.transaction_type in (TransactionType.BUY, TransactionType.SHORT_COVER)) \
+                           else -1*self.units)
+        object.__setattr__(self, "per_cost", self.cost / self.units)
+        object.__setattr__(self, "is_position_increasing",
+                           (self.transaction_type in (TransactionType.BUY, TransactionType.SHORT_SELL)))
     @field_validator("transaction_date", mode="before")
     @classmethod
     def validate_date(cls, t_date:(str|date)) -> date:
         if(isinstance(t_date, str)):
             return datetime.strptime(t_date, settings.default_time_format).date()
         return t_date
-
-    @property
-    def signed_units(self) -> float:
-        return self.units if(self.transaction_type in (TransactionType.BUY, TransactionType.SHORT_COVER)) \
-                          else -1*self.units
-
-    @property
-    def is_position_increasing(self) -> bool:
-        return (self.transaction_type in (TransactionType.BUY, TransactionType.SHORT_SELL))
 
     def __str__(self) -> str:
         return f"({str(self.transaction_type)} {str(self.equity)}: {self.units} shares for {self.cost} on {str(self.transaction_date)})"
